@@ -1,0 +1,12 @@
+#N canvas 326 594 450 300 12;
+#X obj 123 253 print;
+#X obj 58 95 bng 20 250 50 0 empty empty empty 0 -10 0 12 #fcfcfc #000000 #000000;
+#X obj 115 110 netreceive -u -b 3000;
+#X obj 118 146 oscparse;
+#X obj 123 193 route list;
+#X obj 278 214 route value;
+#X connect 1 0 0 0;
+#X connect 2 0 3 0;
+#X connect 3 0 4 0;
+#X connect 4 0 5 0;
+#X connect 5 0 0 0;
