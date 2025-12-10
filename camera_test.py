@@ -1,5 +1,25 @@
 from picamera2 import Picamera2
+from pythonosc import udp_client
 import cv2
+import time
+
+# set up OSC
+IP = "127.0.0.1"   
+PORT = 3000        
+
+client = udp_client.SimpleUDPClient(IP, PORT)
+
+# set up camera
+picam2 = Picamera2()
+config = picam2.create_preview_configuration(
+    main={"format": "RGB888", "size": (640, 480)}
+)
+picam2.configure(config)
+picam2.start()
+
+def main():
+    # get camera
+    runCamera()
 
 # ?????????????
 def get_dominant_color_mean(frame):
@@ -7,32 +27,29 @@ def get_dominant_color_mean(frame):
     mean_color = small.mean(axis=(0, 1))  # B,G,R ???
     return mean_color.astype(int)  # (B, G, R)
 
-
-picam2 = Picamera2()
-
-config = picam2.create_preview_configuration(
-    main={"format": "RGB888", "size": (640, 480)}
-)
-picam2.configure(config)
-picam2.start()
-
-while True:
+def runCamera():
     frame = picam2.capture_array()
     frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
     
-    color = get_dominant_color_mean(frame_bgr)
+    color = get_dominant_color_mean(frame)
     
-    cv2.rectangle(frame_bgr, (0, 0), (100, 100), color.tolist(), -1)
+    cv2.rectangle(frame, (0, 0), (100, 100), color.tolist(), -1)
 
-    cv2.imshow("frame", frame_bgr)
+    cv2.imshow("frame", frame)
 
-    # ?????
-
-    # ????
     print("Dominant Color (B, G, R):", color)
+    
+    # send osc
+    sendOSC(color.tolist())
 
     if cv2.waitKey(1) == 27:  # ESC
-        break
+        cv2.destroyAllWindows()
+        picam2.stop()
 
-cv2.destroyAllWindows()
-picam2.stop()
+def sendOSC(color):
+    client.send_message("/value", color)
+    time.sleep(0.1)
+
+if __name__ == "__main__":
+    while True:
+        main()
