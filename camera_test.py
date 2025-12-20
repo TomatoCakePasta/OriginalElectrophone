@@ -120,9 +120,38 @@ def runCamera():
 # ex. many apples on the white table
 # it gets "red" as the dominant color
 def get_dominant_color_mean(frame):
+    # resize frame to speed up processing
+    # Image consists of very small pixels
+    # 50 x 50 = 2500 pixels
     small = cv2.resize(frame, (50, 50))  
+
+    # calculate average color of the small image
     mean_color = small.mean(axis=(0, 1))  
+    # change data type from float to int
     return mean_color.astype(int)  # (B, G, R)
+
+# ex. when frame resize (2, 2)
+# each pixel has 3 color values (B, G, R)
+# small = [
+#   [ [10, 20, 30],  [40, 50, 60] ],
+#   [ [70, 80, 90],  [100,110,120] ]
+# ]
+
+# Blue
+# (10 + 40 + 70 + 100) / 4
+# = 220 / 4
+# = 55
+
+# Green
+# (20 + 50 + 80 + 110) / 4
+# = 260 / 4
+# = 65
+
+# Red
+# (30 + 60 + 90 + 120) / 4
+# = 300 / 4
+# = 75
+# mean_color = [55.0, 65.0, 75.0]
 
 def readSwitch():
     global prev_states
