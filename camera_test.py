@@ -114,6 +114,24 @@ def runCamera():
         cv2.destroyAllWindows()
         picam2.stop()
 
+def setupWebCamera():
+    global cap
+    cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+
+def runWebCamera():
+ ret, frame = cap.read()
+  if not ret:
+    break
+
+  cv2.imshow("Frame", frame)
+  key = cv2.waitKey(1)
+  
+  # Escキーを入力されたら画面を閉じる
+  if key == 27:
+    cap.release()
+    cv2.destroyAllWindows()
+
 # get dominant color using mean method
 # Get the most common color on the screen
 
