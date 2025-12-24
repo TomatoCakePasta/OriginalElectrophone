@@ -17,6 +17,8 @@ import cv2
 # for time delay
 import time
 
+import numpy as np
+
 # for GPIO input
 import RPi.GPIO as GPIO
 # RPi.GPIO library allows you to control the GPIO pins 
@@ -61,16 +63,22 @@ PORT = 3000
 
 client = udp_client.SimpleUDPClient(IP, PORT)
 
+# --- グローバルに保持 ---
+color = np.array([0, 0, 0], dtype=np.uint8)      # 初期は黒
+center_roi = np.zeros((100, 100, 3), dtype=np.uint8)
+
 # setup function
 # it runs once at the beginning
 def setup():
-    setupCamera()
+    # setupCamera()
+    setupWebCamera()
 
 # main loop
 # it runs every frame
 def main():
     # get camera
     # runCamera()
+    runWebCamera()
     readSwitch()
 
 # reference
@@ -120,17 +128,50 @@ def setupWebCamera():
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
 
 def runWebCamera():
- ret, frame = cap.read()
-  if not ret:
-    break
+    global color, center_roi
 
-  cv2.imshow("Frame", frame)
-  key = cv2.waitKey(1)
-  
-  # Escキーを入力されたら画面を閉じる
-  if key == 27:
-    cap.release()
-    cv2.destroyAllWindows()
+    key = cv2.waitKey(1)
+
+    # sキーで更新
+    if key == ord('s'):
+        ret, frame = cap.read()
+        if ret:
+            h, w, _ = frame.shape
+            cx = w // 2
+            cy = h // 2
+            half = 50
+
+            # 中央100×100を切り出し
+            center_roi = frame[
+                cy - half : cy + half,
+                cx - half : cx + half
+            ].copy()  # ← 重要（参照切れ防止）
+
+            # 色計算
+            color = get_dominant_color_mean(center_roi).astype(np.uint8)
+
+            client.send_message("/shutter", 1)
+
+    # ---------- 表示用キャンバス（黒） ----------
+    canvas_h = 220
+    canvas_w = 120
+    canvas = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
+
+    # 上：平均色
+    canvas[10:110, 10:110] = color
+
+    # 下：前回撮影した中央100×100
+    canvas[120:220, 10:110] = center_roi
+
+    cv2.imshow("Center + Color", canvas)
+
+    # Escキーで終了
+    if key == 27:
+        cap.release()
+        cv2.destroyAllWindows()
+        return False
+
+    return True
 
 # get dominant color using mean method
 # Get the most common color on the screen
