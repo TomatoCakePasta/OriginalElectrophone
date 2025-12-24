@@ -6,7 +6,6 @@
 # - Reuse code
 # - Improve code quality
 # - Access to specialized functionality
-from picamera2 import Picamera2
 
 # for OSC data sending
 from pythonosc import udp_client
@@ -63,64 +62,21 @@ PORT = 3000
 
 client = udp_client.SimpleUDPClient(IP, PORT)
 
-# --- グローバルに保持 ---
-color = np.array([0, 0, 0], dtype=np.uint8)      # 初期は黒
+# --- global ---
+# initial color black
+color = np.array([0, 0, 0], dtype=np.uint8) 
 center_roi = np.zeros((100, 100, 3), dtype=np.uint8)
 
 # setup function
 # it runs once at the beginning
 def setup():
-    # setupCamera()
     setupWebCamera()
 
 # main loop
 # it runs every frame
 def main():
-    # get camera
-    # runCamera()
     runWebCamera()
     readSwitch()
-
-# reference
-# https://github.com/raspberrypi/picamera2/blob/main/examples/capture_png.py
-# please check the following directory
-# examples/capture_png.py
-def setupCamera():
-    picam2 = Picamera2()
-    config = picam2.create_preview_configuration(
-        main={"format": "RGB888", "size": (640, 480)}
-    )
-    picam2.configure(config)
-    picam2.start()
-
-# run camera and process frame
-def runCamera():
-    # reference
-    # https://github.com/raspberrypi/picamera2/blob/main/examples/opencv_face_detect.py
-    # please check the following directory
-    # examples/opencv_face_detect.py
-    frame = picam2.capture_array()
-    # frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-    
-    color = get_dominant_color_mean(frame)
-    
-    # draw rectangle with dominant color
-    # position: (0, 0), size: 100 x 100
-    cv2.rectangle(frame, (0, 0), (100, 100), color.tolist(), -1)
-
-    # display camera frame on window
-    cv2.imshow("frame", frame)
-
-    print("Dominant Color (B, G, R):", color)
-    
-    # send osc
-    # send color as a list to Pure Data
-    sendOSC(color.tolist())
-
-    # exit on ESC key
-    if cv2.waitKey(1) == 27:  # ESC
-        cv2.destroyAllWindows()
-        picam2.stop()
 
 def setupWebCamera():
     global cap
@@ -132,7 +88,7 @@ def runWebCamera():
 
     key = cv2.waitKey(1)
 
-    # sキーで更新
+    # update with 's' key
     if key == ord('s'):
         ret, frame = cap.read()
         if ret:
@@ -141,31 +97,31 @@ def runWebCamera():
             cy = h // 2
             half = 50
 
-            # 中央100×100を切り出し
+            # cut out center 100x100 region
             center_roi = frame[
                 cy - half : cy + half,
                 cx - half : cx + half
-            ].copy()  # ← 重要（参照切れ防止）
+            ].copy()  # important to use .copy() so that original frame is not affected
 
-            # 色計算
+            # get dominant color from the center region
             color = get_dominant_color_mean(center_roi).astype(np.uint8)
 
             client.send_message("/shutter", 1)
 
-    # ---------- 表示用キャンバス（黒） ----------
+    # ---------- display canvas ----------
     canvas_h = 220
     canvas_w = 120
     canvas = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
 
-    # 上：平均色
+    # top: dominant color
     canvas[10:110, 10:110] = color
 
-    # 下：前回撮影した中央100×100
+    # bottom: real camera image 
     canvas[120:220, 10:110] = center_roi
 
     cv2.imshow("Center + Color", canvas)
 
-    # Escキーで終了
+    # exit with 'ESC' key
     if key == 27:
         cap.release()
         cv2.destroyAllWindows()
