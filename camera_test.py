@@ -125,7 +125,7 @@ def test_seven_colors():
     for i in range(len(color_array)):
         strip.set_all_pixels(color_array[i])
         strip.show()
-        time.sleep(1)
+        time.sleep(0.4)
 
 def runWebCamera():
     global color, center_roi
@@ -273,14 +273,24 @@ def readSwitch():
     # it reads (1, 0, 1, 1)
     states = tuple(GPIO.input(pin) for pin in PINS)
 
+    # ★ 初回ガード
+    if prev_states is None:
+        prev_states = states
+        return
+
     # send only when state changes
     # e.x.
     # (0, 0, 0, 0)  --> (1, 0, 0, 0) --> send
     # (1, 0, 0, 0)  --> (1, 0, 0, 0) --> no send
     if states != prev_states:
-        print(" ".join(map(str, states)))
+        converted = tuple(
+            2 if s == p else s
+            for s, p in zip(states, prev_states)
+        )
+
+        print(" ".join(map(str, converted)))
         prev_states = states
-        client.send_message("/btns", states)
+        client.send_message("/btns", converted)
     
 
 def sendOSC(color):
