@@ -36,6 +36,11 @@ import RPi.GPIO as GPIO
 # while BOARD refers to the physical pin numbers on the Raspberry Pi board.
 # ex. Pin 8 is GPIO14 in BCM numbering.
 
+# for Neo-pixel LED tape
+from rpi5_ws2812.ws2812 import Color, WS2812SpiDriver
+
+strip = None
+
 # --- Just different ways to refer to the same pins ---
 GPIO.setmode(GPIO.BCM)
 
@@ -71,6 +76,7 @@ center_roi = np.zeros((100, 100, 3), dtype=np.uint8)
 # it runs once at the beginning
 def setup():
     setupWebCamera()
+    setupNeopixel()
 
 # main loop
 # it runs every frame
@@ -82,6 +88,12 @@ def setupWebCamera():
     global cap
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+
+def setupNeopixel():
+    global strip 
+    strip = WS2812SpiDriver(spi_bus=0, spi_device=0, led_count=8).get_strip()
+
+    setNeopixelColor(np.array([40, 40, 40], dtype=np.uint8) )
 
 def runWebCamera():
     global color, center_roi
@@ -108,6 +120,9 @@ def runWebCamera():
 
             client.send_message("/shutter", 1)
 
+            setNeopixelColor(color)
+
+
     # ---------- display canvas ----------
     canvas_h = 220
     canvas_w = 120
@@ -125,9 +140,21 @@ def runWebCamera():
     if key == 27:
         cap.release()
         cv2.destroyAllWindows()
+        GPIO.cleanup()
+        strip.set_all_pixels(Color(0, 0, 0))
+        strip.show()
+        exit(0)
         return False
 
     return True
+
+def setNeopixelColor(bgr):
+    b = int(bgr[0] * 0.2)
+    g = int(bgr[1] * 0.2)
+    r = int(bgr[2] * 0.2)
+
+    strip.set_all_pixels(Color(r, g, b))
+    strip.show()
 
 # get dominant color using mean method
 # Get the most common color on the screen
@@ -196,5 +223,14 @@ def sendOSC(color):
 
 if __name__ == "__main__":
     setup()
-    while True:
-        main()
+    try:
+        while True:
+            main()
+
+    finally:
+        strip.set_all_pixels(Color(0, 0, 0))
+        strip.show()
+        time.sleep(500)
+
+        GPIO.cleanup()
+        cv2.destroyAllWindows()
