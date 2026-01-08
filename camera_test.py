@@ -72,11 +72,36 @@ client = udp_client.SimpleUDPClient(IP, PORT)
 color = np.array([0, 0, 0], dtype=np.uint8) 
 center_roi = np.zeros((100, 100, 3), dtype=np.uint8)
 
+color_array = [
+    # red
+    Color(80, 0, 0),
+    # orange
+    Color(60, 20, 0),
+    # yellow
+    Color(40, 40, 0),
+    # green
+    Color(0, 80, 0),
+    #blue
+    Color(0, 0, 80),
+    #white
+    Color(23, 23, 23)
+]
+
+base_colors = [
+    Color(255, 0, 0),
+    Color(255, 165, 0),
+    Color(255, 255, 0),
+    Color(0, 128, 0),
+    Color(0, 0, 255),
+    Color(255, 255, 255)
+]
+
 # setup function
 # it runs once at the beginning
 def setup():
     setupWebCamera()
     setupNeopixel()
+    test_seven_colors()
 
 # main loop
 # it runs every frame
@@ -94,6 +119,13 @@ def setupNeopixel():
     strip = WS2812SpiDriver(spi_bus=0, spi_device=0, led_count=8).get_strip()
 
     setNeopixelColor(np.array([40, 40, 40], dtype=np.uint8) )
+
+def test_seven_colors():
+    global color_array
+    for i in range(len(color_array)):
+        strip.set_all_pixels(color_array[i])
+        strip.show()
+        time.sleep(1)
 
 def runWebCamera():
     global color, center_roi
@@ -149,12 +181,46 @@ def runWebCamera():
     return True
 
 def setNeopixelColor(bgr):
-    b = int(bgr[0] * 0.2)
-    g = int(bgr[1] * 0.2)
-    r = int(bgr[2] * 0.2)
+    b = int(bgr[0])
+    g = int(bgr[1])
+    r = int(bgr[2])
 
-    strip.set_all_pixels(Color(r, g, b))
+    # strip.set_all_pixels(Color(r, g, b))
+    strip.set_all_pixels(get_nearest_color(Color(r, g, b)))
     strip.show()
+
+def get_nearest_color(input_color):
+    """
+    input_color : Color(r, g, b)
+    return      : Color (most similar)
+    """
+
+    brightness = input_color.r + input_color.g + input_color.b
+    if brightness < 30:
+        return scale_color(Color(255, 255, 255), 0.1)
+
+    def distance(c1, c2):
+        return (
+            (c1.r - c2.r) ** 2 +
+            (c1.g - c2.g) ** 2 +
+            (c1.b - c2.b) ** 2
+        )
+
+    nearest = min(
+        base_colors,
+        key=lambda c: distance(input_color, c)
+    )
+
+    nearest = scale_color(nearest, 0.1)
+
+    return nearest
+
+def scale_color(color, scale):
+    return Color(
+        int(color.r * scale),
+        int(color.g * scale),
+        int(color.b * scale)
+    )
 
 # get dominant color using mean method
 # Get the most common color on the screen
@@ -230,7 +296,7 @@ if __name__ == "__main__":
     finally:
         strip.set_all_pixels(Color(0, 0, 0))
         strip.show()
-        time.sleep(500)
+        time.sleep(1)
 
         GPIO.cleanup()
         cv2.destroyAllWindows()
