@@ -69,8 +69,10 @@ client = udp_client.SimpleUDPClient(IP, PORT)
 
 # --- global ---
 # initial color black
-color = np.array([0, 0, 0], dtype=np.uint8) 
+selected_color = np.array([0, 0, 0], dtype=np.uint8) 
 center_roi = np.zeros((100, 100, 3), dtype=np.uint8)
+
+LED_NUMS = 8
 
 color_array = [
     # red
@@ -96,18 +98,26 @@ base_colors = [
     Color(255, 255, 255)
 ]
 
+isScaned = False
+gl_led_idx_pingpong = 0
+gl_led_pingpong_direction = 0.1
+
 # setup function
 # it runs once at the beginning
 def setup():
     setupWebCamera()
     setupNeopixel()
-    test_seven_colors()
+    # test_seven_colors()
 
 # main loop
 # it runs every frame
 def main():
+    global isScaned
     runWebCamera()
     readSwitch()
+
+    if isScaned:
+        animateLedPingPong()
 
 def setupWebCamera():
     global cap
@@ -116,7 +126,7 @@ def setupWebCamera():
 
 def setupNeopixel():
     global strip 
-    strip = WS2812SpiDriver(spi_bus=0, spi_device=0, led_count=8).get_strip()
+    strip = WS2812SpiDriver(spi_bus=0, spi_device=0, led_count=LED_NUMS).get_strip()
 
     setNeopixelColor(np.array([40, 40, 40], dtype=np.uint8) )
 
@@ -128,7 +138,7 @@ def test_seven_colors():
         time.sleep(0.4)
 
 def runWebCamera():
-    global color, center_roi
+    global selected_color, center_roi, isScaned
 
     key = cv2.waitKey(1)
 
@@ -148,11 +158,13 @@ def runWebCamera():
             ].copy()  # important to use .copy() so that original frame is not affected
 
             # get dominant color from the center region
-            color = get_dominant_color_mean(center_roi).astype(np.uint8)
+            selected_color = get_dominant_color_mean(center_roi).astype(np.uint8)
+
+            isScaned = True
 
             client.send_message("/shutter", 1)
 
-            setNeopixelColor(color)
+            setNeopixelColor(selected_color)
 
 
     # ---------- display canvas ----------
@@ -161,7 +173,7 @@ def runWebCamera():
     canvas = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
 
     # top: dominant color
-    canvas[10:110, 10:110] = color
+    canvas[10:110, 10:110] = selected_color
 
     # bottom: real camera image 
     canvas[120:220, 10:110] = center_roi
@@ -185,8 +197,13 @@ def setNeopixelColor(bgr):
     g = int(bgr[1])
     r = int(bgr[2])
 
+    converted_color = get_nearest_color(Color(r, g, b))
+
+    # update selected_color(g, b, r) -> nearest_color(r, g, b)
+    selected_color = converted_color
+
     # strip.set_all_pixels(Color(r, g, b))
-    strip.set_all_pixels(get_nearest_color(Color(r, g, b)))
+    strip.set_all_pixels(converted_color)
     strip.show()
 
 def get_nearest_color(input_color):
@@ -221,6 +238,35 @@ def scale_color(color, scale):
         int(color.g * scale),
         int(color.b * scale)
     )
+
+def animateLedPingPong():
+    global gl_led_idx_pingpong
+    global gl_led_pingpong_direction
+    global isScaned
+    global strip
+    converted_led_idx = int(gl_led_idx_pingpong)
+
+    strip.set_all_pixels(Color(0, 0, 0))
+
+    for i in range(converted_led_idx):
+        strip.set_pixel_color(i, bgr_to_color(selected_color))
+    strip.show()
+
+    gl_led_idx_pingpong += gl_led_pingpong_direction
+    converted_led_idx = int(gl_led_idx_pingpong)
+
+    if converted_led_idx == LED_NUMS:
+        converted_led_idx = LED_NUMS - 1
+        gl_led_pingpong_direction *= -1
+
+    # end process
+    if (converted_led_idx == 0) and (gl_led_pingpong_direction < 0):
+        gl_led_pingpong_direction *= -1
+        gl_led_idx_pingpong = 0
+        isScaned = False
+
+def bgr_to_color(bgr):
+    return Color(int(bgr[2]), int(bgr[1]), int(bgr[0]))
 
 # get dominant color using mean method
 # Get the most common color on the screen
@@ -273,6 +319,8 @@ def readSwitch():
     # it reads (1, 0, 1, 1)
     states = tuple(GPIO.input(pin) for pin in PINS)
 
+    send_message = None
+
     # ★ 初回ガード
     if prev_states is None:
         prev_states = states
@@ -288,9 +336,29 @@ def readSwitch():
             for s, p in zip(states, prev_states)
         )
 
-        print(" ".join(map(str, converted)))
+        # whether switch[2], [3] is pushed
+        # pressed_23 = any(
+        #     prev_states[i] == 1 and states[i] == 0
+        #     for i in (2, 3)
+        # )
+
+        # if pressed_23:
+        #     converted = tuple(
+        #         2 if (i in (2, 3) and s == p) else s
+        #         for i, (s, p) in enumerate(zip(states, prev_states))
+        #     )
+
+        #     print("raw      :", states)
+        #     print("converted:", converted)
+        #     send_message = converted
+        # else:
+        #     send_message = states
+
+        send_message = converted
+
         prev_states = states
-        client.send_message("/btns", converted)
+
+        client.send_message("/btns", send_message)
     
 
 def sendOSC(color):
