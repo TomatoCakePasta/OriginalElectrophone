@@ -46,8 +46,10 @@ GPIO.setmode(GPIO.BCM)
 
 # for switch input
 # Using 4 GPIO pins for 4 switches
-# GPIO14, GPIO15, GPIO18, GPIO23
-PINS = [14, 15, 18, 23]
+# (GPIO14, GPIO15, GPIO18, GPIO23) 
+# = (switch 4, 3, 2, 1 from right) 
+# PINS = [14, 15, 18, 23, 24]
+PINS = [23, 18, 15, 14, 24]
 prev_states = None
 
 # set up input pins with pull-up resistors
@@ -74,19 +76,28 @@ center_roi = np.zeros((100, 100, 3), dtype=np.uint8)
 
 LED_NUMS = 8
 
+# color_array = [
+#     # red
+#     Color(80, 0, 0),
+#     # orange
+#     Color(60, 20, 0),
+#     # yellow
+#     Color(40, 40, 0),
+#     # green
+#     Color(0, 80, 0),
+#     #blue
+#     Color(0, 0, 80),
+#     #white
+#     Color(23, 23, 23)
+# ]
+
 color_array = [
-    # red
-    Color(80, 0, 0),
-    # orange
-    Color(60, 20, 0),
-    # yellow
-    Color(40, 40, 0),
-    # green
-    Color(0, 80, 0),
-    #blue
-    Color(0, 0, 80),
-    #white
-    Color(23, 23, 23)
+    Color(255, 0, 0),
+    Color(255, 165, 0),
+    Color(255, 255, 0),
+    Color(0, 128, 0),
+    Color(0, 0, 255),
+    Color(255, 255, 255)
 ]
 
 base_colors = [
@@ -107,7 +118,7 @@ gl_led_pingpong_direction = 0.1
 def setup():
     setupWebCamera()
     setupNeopixel()
-    # test_seven_colors()
+    test_seven_colors()
 
 # main loop
 # it runs every frame
@@ -116,8 +127,9 @@ def main():
     runWebCamera()
     readSwitch()
 
-    if isScaned:
-        animateLedPingPong()
+    # if isScaned:
+    #     animateLedPingPong()
+
 
 def setupWebCamera():
     global cap
@@ -144,28 +156,7 @@ def runWebCamera():
 
     # update with 's' key
     if key == ord('s'):
-        ret, frame = cap.read()
-        if ret:
-            h, w, _ = frame.shape
-            cx = w // 2
-            cy = h // 2
-            half = 50
-
-            # cut out center 100x100 region
-            center_roi = frame[
-                cy - half : cy + half,
-                cx - half : cx + half
-            ].copy()  # important to use .copy() so that original frame is not affected
-
-            # get dominant color from the center region
-            selected_color = get_dominant_color_mean(center_roi).astype(np.uint8)
-
-            isScaned = True
-
-            client.send_message("/shutter", 1)
-
-            setNeopixelColor(selected_color)
-
+        takePicture()
 
     # ---------- display canvas ----------
     canvas_h = 220
@@ -192,7 +183,35 @@ def runWebCamera():
 
     return True
 
+def takePicture():
+    global selected_color, center_roi, isScaned
+
+    ret, frame = cap.read()
+    if ret:
+        h, w, _ = frame.shape
+        cx = w // 2
+        cy = h // 2
+        half = 50
+
+        # cut out center 100x100 region
+        center_roi = frame[
+            cy - half : cy + half,
+            cx - half : cx + half
+        ].copy()  # important to use .copy() so that original frame is not affected
+
+        # get dominant color from the center region
+        selected_color = get_dominant_color_mean(center_roi).astype(np.uint8)
+
+        isScaned = True
+
+        client.send_message("/shutter", 1)
+
+        setNeopixelColor(selected_color)
+
 def setNeopixelColor(bgr):
+    # FIX Does it need global?
+    global selected_color
+
     b = int(bgr[0])
     g = int(bgr[1])
     r = int(bgr[2])
@@ -201,6 +220,7 @@ def setNeopixelColor(bgr):
 
     # update selected_color(g, b, r) -> nearest_color(r, g, b)
     selected_color = converted_color
+    print("Selected Color", selected_color.r, selected_color.g, selected_color.b)
 
     # strip.set_all_pixels(Color(r, g, b))
     strip.set_all_pixels(converted_color)
@@ -228,11 +248,12 @@ def get_nearest_color(input_color):
         key=lambda c: distance(input_color, c)
     )
 
-    nearest = scale_color(nearest, 0.1)
+    nearest = scale_color(nearest, 1)
 
     return nearest
 
 def scale_color(color, scale):
+    print("Scaling color:", color.r, color.g, color.b, "by", scale)
     return Color(
         int(color.r * scale),
         int(color.g * scale),
@@ -249,6 +270,7 @@ def animateLedPingPong():
     strip.set_all_pixels(Color(0, 0, 0))
 
     for i in range(converted_led_idx):
+        # FIX
         strip.set_pixel_color(i, bgr_to_color(selected_color))
     strip.show()
 
@@ -325,6 +347,13 @@ def readSwitch():
     if prev_states is None:
         prev_states = states
         return
+
+    # --- ★ GPIO24 が押された瞬間を検出 ---
+    gpio24_idx = 4  # PINS の中での位置
+
+    if prev_states[gpio24_idx] == 1 and states[gpio24_idx] == 0:
+        print("GPIO24 pressed → takePicture()")
+        takePicture()
 
     # send only when state changes
     # e.x.
