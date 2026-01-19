@@ -419,3 +419,4 @@ FodyWeavers.xsd
 
 sounds/**
 *.logicx
+*.DS_Store
