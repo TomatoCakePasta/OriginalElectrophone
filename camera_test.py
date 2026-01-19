@@ -74,7 +74,7 @@ client = udp_client.SimpleUDPClient(IP, PORT)
 selected_color = np.array([0, 0, 0], dtype=np.uint8) 
 center_roi = np.zeros((100, 100, 3), dtype=np.uint8)
 
-LED_NUMS = 8
+LED_NUMS = 10
 
 # color_array = [
 #     # red
@@ -224,6 +224,7 @@ def setNeopixelColor(bgr):
 
     # strip.set_all_pixels(Color(r, g, b))
     strip.set_all_pixels(converted_color)
+    strip.set_pixel_color(0, Color(0, 0, 0))
     strip.show()
 
 def get_nearest_color(input_color):
